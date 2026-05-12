@@ -1,6 +1,6 @@
 # shotsmash
 
-> Stop wasting Claude/GPT vision tokens on 5MB screenshots. Every macOS screenshot you take is auto-converted to a small WebP — typically **80–95% smaller**, identical visual quality.
+> Stop bleeding vision tokens every time you paste a screenshot into Claude Code, Cursor, or Codex. Every macOS screenshot you take is auto-converted to a small WebP — typically **80–95% smaller**, identical visual quality.
 
 ```
 5,177 KB PNG  →  350 KB WebP   (-94%)
@@ -27,15 +27,30 @@ Then take a screenshot. Check `~/Pictures/Screenshots/` — your `.png` becomes 
 
 ## Why this exists
 
-Pasting screenshots into Claude/ChatGPT is the fastest way to ask a question. But a full-res Retina screenshot is **3024×1890 PNG ≈ 5 MB**. That blows up your upload time and your token bill.
+**Claude Code, Cursor, Codex CLI, Copilot Chat — none of them pre-compress your screenshots.** Every 5 MB Retina PNG you paste goes straight to the model, and the SOTA coding models charge per pixel. Claude Code's only built-in defense kicks in above 2,000 px [^claude-code-resize]; everything else gets sent raw.
 
-| | Pixels | Tokens (Claude) | File size |
+### How much you save in your coding tool
+
+Cost per image, paying out of pocket via API. Assumes a typical macOS Retina screenshot.
+
+| Coding tool + model | Raw 3024×1890 PNG | shotsmash 1400×875 WebP | Savings |
 |---|---|---|---|
-| Raw Retina PNG | 3024×1890 | ~7,620 | ~5 MB |
-| shotsmash WebP | 1400×875 | ~1,633 | ~50 KB |
-| **Savings** | | **~79%** | **~99%** |
+| **Claude Code + Opus 4.7** | 4,784 tok · $0.024 | 1,634 tok · $0.008 | **−66%** |
+| **Cursor + GPT-5.5** | 5,664 tok · $0.028 | 1,247 tok · $0.006 | **−78%** |
+| **Codex CLI + GPT-5.5** | 5,664 tok · $0.028 | 1,247 tok · $0.006 | **−78%** |
+| **Copilot Chat + GPT-5.5** | 5,664 tok · $0.028 | 1,247 tok · $0.006 | **−78%** |
+| Claude Code + Sonnet 4.6 | 1,568 tok (capped) | 1,568 tok (capped) | tokens unchanged ¹ |
+| Gemini 3.1 Pro (any tool) | 560 tok (flat) | 560 tok (flat) | tokens unchanged ¹ |
 
-(Token count formula: `(w × h) / 750` for Claude vision models.)
+> 20 screenshots/day × 20 workdays = **400/month**. On Cursor + GPT-5.5 that's **$11.33 → $2.49** out of pocket. For a 10-person team: **~$1,060/year saved**. [^anthropic-vision] [^openai-vision] [^pricing]
+
+¹ Sonnet 4.6 / Haiku 4.5 cap at 1,568 image tokens. Gemini charges a flat 560/image. In those cases per-image **token** cost doesn't change — but you still get (a) 99% faster uploads (5 MB → 50 KB), (b) automatic protection when Cursor's Auto mode routes you to Opus 4.7, where image tokens triple [^opus-3x].
+
+[^claude-code-resize]: Claude Code only auto-downscales images over 2,000 px (since v2.1.126). Anything 1,400–2,000 px is sent raw. [github.com/anthropics/claude-code#20738](https://github.com/anthropics/claude-code/issues/20738)
+[^anthropic-vision]: Claude vision token formula `width × height / 750`, capped at 1,568 tokens for Sonnet/Haiku and 4,784 for Opus 4.7 (long edge ≤2576 px). [Anthropic vision docs](https://platform.claude.com/docs/en/build-with-claude/vision)
+[^openai-vision]: GPT-5/5.5 uses 32×32 pixel patches: `ceil(w/32) × ceil(h/32)` tokens. [OpenAI vision guide](https://developers.openai.com/api/docs/guides/images-vision)
+[^pricing]: [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing) · [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing)
+[^opus-3x]: Opus 4.7 raised the per-image token ceiling to ~4,784 (from ~1,568), a 3× jump. [claudecodecamp.com](https://www.claudecodecamp.com/p/images-cost-3x-more-tokens-in-claude-opus-4-7)
 
 ## How it compares
 
