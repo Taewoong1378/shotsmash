@@ -1,0 +1,135 @@
+#!/bin/bash
+# shotsmash — auto-shrink macOS screenshots to WebP for AI/upload efficiency.
+#
+# Watches a folder (default: ~/Pictures/Screenshots) and converts new screenshots
+# to resized WebP. Triggered by the bundled launchd agent on file change, plus
+# a 30-second polling fallback.
+#
+# Configuration: edit ~/.config/shotsmash/config.sh (overrides defaults below).
+
+set -u
+
+# ============== DEFAULTS ==============
+WATCH_DIR="${WATCH_DIR:-$HOME/Pictures/Screenshots}"
+MAX_DIM="${MAX_DIM:-1400}"              # Long-side max in pixels
+QUALITY="${QUALITY:-78}"                # WebP/JPEG quality (1-100)
+OUTPUT_FORMAT="${OUTPUT_FORMAT:-webp}"  # webp | jpg
+KEEP_ORIGINALS="${KEEP_ORIGINALS:-true}"
+ORIGINAL_RETENTION_DAYS="${ORIGINAL_RETENTION_DAYS:-7}"
+MIN_LONG_SIDE="${MIN_LONG_SIDE:-400}"   # Skip tinier images (icons, etc.)
+SCREENSHOT_PATTERNS=(
+  "* [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*"  # macOS default (any locale)
+  "Screenshot *"
+  "CleanShot *"
+)
+# Optional user overrides
+CONFIG_FILE="${SHOTSMASH_CONFIG:-$HOME/.config/shotsmash/config.sh}"
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+# ======================================
+
+XATTR_KEY="com.shotsmash.processed"
+LOG="${SHOTSMASH_LOG:-$HOME/Library/Logs/shotsmash.log}"
+ORIG_DIR="${SHOTSMASH_ORIGINALS_DIR:-$HOME/.shotsmash/originals}"
+
+mkdir -p "$(dirname "$LOG")"
+$KEEP_ORIGINALS && mkdir -p "$ORIG_DIR"
+
+EFFECTIVE_FORMAT="$OUTPUT_FORMAT"
+if [[ "$OUTPUT_FORMAT" == "webp" ]] && ! command -v cwebp >/dev/null 2>&1; then
+  EFFECTIVE_FORMAT="jpg"
+fi
+
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
+to_lower() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# Prune old originals
+if $KEEP_ORIGINALS && [[ -d "$ORIG_DIR" ]]; then
+  find "$ORIG_DIR" -maxdepth 1 -type f -mtime "+$ORIGINAL_RETENTION_DAYS" -delete 2>/dev/null
+fi
+
+# Build find -iname args
+find_name_args=()
+for pat in "${SCREENSHOT_PATTERNS[@]}"; do
+  if [[ ${#find_name_args[@]} -gt 0 ]]; then
+    find_name_args+=("-o")
+  fi
+  find_name_args+=("-iname" "${pat}.png" "-o" "-iname" "${pat}.jpg" "-o" "-iname" "${pat}.jpeg")
+done
+
+[[ -d "$WATCH_DIR" ]] || { log "skip: watch dir missing: $WATCH_DIR"; exit 0; }
+
+find "$WATCH_DIR" -maxdepth 1 -type f \( "${find_name_args[@]}" \) 2>/dev/null | while IFS= read -r f; do
+  [[ -f "$f" ]] || continue
+
+  # Idempotent against re-fires
+  if xattr -l "$f" 2>/dev/null | grep -q "$XATTR_KEY"; then
+    continue
+  fi
+
+  dims=$(sips -g pixelWidth -g pixelHeight "$f" 2>/dev/null | awk '/pixel(Width|Height):/ {print $2}')
+  w=$(echo "$dims" | sed -n 1p)
+  h=$(echo "$dims" | sed -n 2p)
+  if [[ -z "$w" || -z "$h" ]]; then
+    log "skip-nodims: $f"
+    continue
+  fi
+
+  long=$(( w > h ? w : h ))
+  size_before=$(stat -f %z "$f" 2>/dev/null || echo 0)
+
+  if (( long < MIN_LONG_SIDE )); then
+    log "skip-tiny ${w}x${h}: $(basename "$f")"
+    continue
+  fi
+
+  if $KEEP_ORIGINALS; then
+    cp -p "$f" "$ORIG_DIR/$(basename "$f")" 2>/dev/null || true
+  fi
+
+  if (( long > MAX_DIM )); then
+    sips -Z "$MAX_DIM" "$f" >/dev/null 2>&1 || { log "fail-resize: $f"; continue; }
+  fi
+
+  ext_lower=$(to_lower "${f##*.}")
+  current="$f"
+  base="${f%.*}"
+
+  case "$EFFECTIVE_FORMAT" in
+    webp)
+      new="${base}.webp"
+      if cwebp -quiet -q "$QUALITY" -sharp_yuv -metadata none "$f" -o "$new" 2>/dev/null && [[ -s "$new" ]]; then
+        rm -f "$f"
+        current="$new"
+      else
+        log "fail-webp: $f"
+      fi
+      ;;
+    jpg|jpeg)
+      if [[ "$ext_lower" == "png" ]]; then
+        new="${base}.jpg"
+        if sips -s format jpeg -s formatOptions "$QUALITY" "$f" --out "$new" >/dev/null 2>&1 && [[ -s "$new" ]]; then
+          rm -f "$f"
+          current="$new"
+        fi
+      else
+        sips -s formatOptions "$QUALITY" "$current" >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
+
+  xattr -w "$XATTR_KEY" "1" "$current" 2>/dev/null || true
+
+  size_after=$(stat -f %z "$current" 2>/dev/null || echo 0)
+  ndims=$(sips -g pixelWidth -g pixelHeight "$current" 2>/dev/null | awk '/pixel(Width|Height):/ {print $2}')
+  nw=$(echo "$ndims" | sed -n 1p)
+  nh=$(echo "$ndims" | sed -n 2p)
+
+  kb_before=$(( size_before / 1024 ))
+  kb_after=$(( size_after / 1024 ))
+  pct=0
+  if (( size_before > 0 )); then
+    pct=$(( 100 - (size_after * 100 / size_before) ))
+  fi
+
+  log "ok ${w}x${h}→${nw}x${nh} ${kb_before}KB→${kb_after}KB (-${pct}%): $(basename "$current")"
+done
