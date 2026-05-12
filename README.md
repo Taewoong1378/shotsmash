@@ -18,6 +18,15 @@ No new shortcut to learn. Press `Cmd+Shift+4` like always. shotsmash handles the
 
 The moment you hit `Cmd+Shift+4`, the file lands as a 125 KB PNG — then shotsmash silently swaps it for a 14 KB WebP. Same screenshot. Same visual content. **9× smaller.**
 
+### Two modes, both running by default
+
+| Mode | What it watches | What it does | Covers |
+|---|---|---|---|
+| **File mode** | `~/Pictures/Screenshots/` | Resize to 1400 px → convert to WebP (~80–95% smaller) | Workflow: drag the saved file from Finder into Claude Code |
+| **Clipboard mode** | Your macOS clipboard | Resize any image > 1400 px (keeps PNG for universal app support) | Workflow: click the floating screenshot thumbnail → `Cmd+C` → paste — this path **bypasses files entirely**, so file mode alone wouldn't help |
+
+The clipboard mode is what catches the **most common coding-tool workflow**: hit `Cmd+Shift+4`, click the floating preview, copy, paste into Claude Code. Without it, the raw full-res bitmap goes straight to the model.
+
 ## Install
 
 ```sh
@@ -66,6 +75,7 @@ Cost per image, paying out of pocket via API. Assumes a typical macOS Retina scr
 |---|:-:|:-:|:-:|:-:|:-:|
 | Auto-process every screenshot | ✅ | ✅ (own shortcut) | ⚠️ partial | ❌ | ✅ |
 | Keep native `Cmd+Shift+4` | ✅ | ❌ | ✅ ¹ | n/a | ✅ |
+| **Auto-resize on clipboard paste** | ✅ | ❓ | ❌ | ❌ | ❌ |
 | WebP output | ✅ | ✅ | ✅ (v4.8+) | ❌ | DIY |
 | Resize | ✅ | ✅ | ✅ | ❌ | DIY |
 | AI-token-aware defaults | ✅ | ✅ | ❌ | ❌ | ❌ |

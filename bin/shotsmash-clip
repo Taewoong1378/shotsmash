@@ -1,0 +1,76 @@
+#!/bin/bash
+# shotsmash-clip — clipboard image resizer.
+#
+# Runs as a long-lived background process (managed by launchd KeepAlive).
+# When a large image lands on the clipboard (screenshot floating thumbnail,
+# Figma copy, browser "copy image", Markup "Copy", etc.), it is automatically
+# resized down to MAX_DIM long-side and put back on the clipboard.
+#
+# This is the workflow most coding-tool users actually hit: take screenshot →
+# click the floating thumbnail → Cmd+C → paste into Claude Code / Cursor / Codex.
+# Without this, the original full-res image goes straight into the model with
+# no token-cost reduction.
+
+set -u
+
+MAX_DIM="${CLIP_MAX_DIM:-1400}"
+POLL_INTERVAL="${CLIP_POLL_INTERVAL:-1.0}"
+
+CONFIG_FILE="${SHOTSMASH_CONFIG:-$HOME/.config/shotsmash/config.sh}"
+[[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+
+LOG="${SHOTSMASH_CLIP_LOG:-$HOME/Library/Logs/shotsmash-clip.log}"
+mkdir -p "$(dirname "$LOG")"
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
+
+if ! command -v pngpaste >/dev/null 2>&1; then
+  log "fatal: pngpaste not found. Install via 'brew install pngpaste'."
+  exit 1
+fi
+
+TMP_IN=$(mktemp -t shotsmash-clip-in)
+TMP_OUT=$(mktemp -t shotsmash-clip-out)
+cleanup() { rm -f "$TMP_IN" "$TMP_OUT"; log "stopping"; exit 0; }
+trap cleanup SIGTERM SIGINT
+
+log "starting (MAX_DIM=$MAX_DIM, poll=${POLL_INTERVAL}s, pid=$$)"
+
+while true; do
+  sleep "$POLL_INTERVAL"
+
+  pngpaste "$TMP_IN" 2>/dev/null || continue
+  [[ -s "$TMP_IN" ]] || continue
+
+  DIMS=$(sips -g pixelWidth -g pixelHeight "$TMP_IN" 2>/dev/null | awk '/pixel(Width|Height):/ {print $2}')
+  W=$(echo "$DIMS" | sed -n 1p)
+  H=$(echo "$DIMS" | sed -n 2p)
+  [[ -z "$W" || -z "$H" ]] && continue
+
+  LONG=$(( W > H ? W : H ))
+
+  # If already at/below target, leave it. Also serves as our loop-guard:
+  # the resized image we just put back has LONG == MAX_DIM, so it gets skipped.
+  (( LONG <= MAX_DIM )) && continue
+
+  SIZE_BEFORE=$(stat -f %z "$TMP_IN" 2>/dev/null || echo 0)
+
+  cp "$TMP_IN" "$TMP_OUT"
+  sips -Z "$MAX_DIM" "$TMP_OUT" >/dev/null 2>&1 || { log "fail-resize ${W}x${H}"; continue; }
+  [[ -s "$TMP_OUT" ]] || { log "fail-empty-output ${W}x${H}"; continue; }
+
+  ND=$(sips -g pixelWidth -g pixelHeight "$TMP_OUT" 2>/dev/null | awk '/pixel(Width|Height):/ {print $2}')
+  NW=$(echo "$ND" | sed -n 1p)
+  NH=$(echo "$ND" | sed -n 2p)
+  SIZE_AFTER=$(stat -f %z "$TMP_OUT" 2>/dev/null || echo 0)
+
+  # Put PNG back on clipboard via AppleScript pasteboard class
+  osascript -e "set the clipboard to (read (POSIX file \"$TMP_OUT\") as «class PNGf»)" 2>/dev/null \
+    || { log "fail-clip-set"; continue; }
+
+  KB_BEFORE=$(( SIZE_BEFORE / 1024 ))
+  KB_AFTER=$(( SIZE_AFTER / 1024 ))
+  PCT=0
+  (( SIZE_BEFORE > 0 )) && PCT=$(( 100 - (SIZE_AFTER * 100 / SIZE_BEFORE) ))
+
+  log "resized ${W}x${H}→${NW}x${NH} ${KB_BEFORE}KB→${KB_AFTER}KB (-${PCT}%)"
+done
