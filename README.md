@@ -1,5 +1,7 @@
 # shotsmash
 
+![shotsmash hero](hero.png)
+
 > Stop bleeding vision tokens every time you paste a screenshot into Claude Code, Cursor, or Codex. Every macOS screenshot you take is auto-converted to a small WebP — typically **80–95% smaller**, identical visual quality.
 
 ```
@@ -9,6 +11,12 @@
 ```
 
 No new shortcut to learn. Press `Cmd+Shift+4` like always. shotsmash handles the rest in the background.
+
+### See it in action
+
+![demo](demo.gif)
+
+The moment you hit `Cmd+Shift+4`, the file lands as a 125 KB PNG — then shotsmash silently swaps it for a 14 KB WebP. Same screenshot. Same visual content. **9× smaller.**
 
 ## Install
 
