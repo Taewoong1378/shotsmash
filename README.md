@@ -41,13 +41,15 @@ Pasting screenshots into Claude/ChatGPT is the fastest way to ask a question. Bu
 
 | | shotsmash | [LLM Image Optimizer](https://www.image-optimizer.app/) | CleanShot X | ImageOptim | Folder Action scripts |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Auto-process every screenshot | ✅ | ✅ (own shortcut) | ❌ | ❌ | ✅ |
-| Keep native `Cmd+Shift+4` | ✅ | ❌ | ✅ | n/a | ✅ |
-| WebP output | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Resize | ✅ | ✅ | ✅ | partial | ❌ |
+| Auto-process every screenshot | ✅ | ✅ (own shortcut) | ⚠️ partial | ❌ | ✅ |
+| Keep native `Cmd+Shift+4` | ✅ | ❌ | ✅ ¹ | n/a | ✅ |
+| WebP output | ✅ | ✅ | ✅ (v4.8+) | ❌ | DIY |
+| Resize | ✅ | ✅ | ✅ | ❌ | DIY |
 | AI-token-aware defaults | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Native macOS (no Electron) | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Free / open source | ✅ | $ | $$ | ✅ | ✅ |
+| Native macOS (no Electron) | ✅ | ❓ ² | ✅ | ✅ | ✅ |
+| Free / open source | ✅ | Freemium ³ | $29 + $8/mo ⁴ | ✅ | ✅ |
+
+<sub>¹ Default keeps system shortcuts; CleanShot can override them as an opt-in setting. &nbsp; ² Marketed as "Apple Silicon native" but framework (Swift / Electron) not publicly confirmed. &nbsp; ³ 100 images/mo free, £19.99/yr Pro, £59.99 lifetime. &nbsp; ⁴ $29 one-time (app + Cloud Basic). Cloud Pro $8/mo billed annually.</sub>
 
 ## Configuration
 
